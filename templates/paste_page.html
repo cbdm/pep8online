@@ -2,25 +2,29 @@
 {% block content %}
 
     <form name="code_form" action="/checkresult" method="POST">
-        <div class="span12">
-            <h3>Just paste your code here</h3>
-            <label for="code">
-                <input type="hidden" id="code" name="code" value="">
-            </label>
-            <pre id="editor" style="padding: 0px;"></pre>
-            <script src="/static/ace/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
-            <script>
-                var editor = ace.edit("editor");
-                var textarea = document.getElementById('code');
-                editor.setTheme("ace/theme/chrome");
-                editor.getSession().setMode("ace/mode/python");
-                var codeSubmit = function() {
-                    textarea.value = editor.getSession().getValue();
-                    document.forms['code_form'].submit();
-                }
-            </script>
-            <button type="submit" class="btn span3" onclick="codeSubmit()">Check code</button>
-        </div>
+        <label for="code">
+            <input type="hidden" id="code" name="code" value="">
+        </label>
+        <textarea id="editor"></textarea>
+        <script src="/static/js/codemirror.js"></script>
+        <script src="/static/js/python.js"></script>
+        <script>
+        var editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
+            mode: {name: "python",
+                   version: 3,
+                   singleLineStringErrors: false},
+            lineNumbers: true,
+            indentUnit: 4,
+            matchBrackets: true
+        });
+        var textarea = document.getElementById('code');
+        var codeSubmit = function() {
+            textarea.value = editor.getValue();
+            document.forms['code_form'].submit();
+        }
+        </script>
+        <br>
+        <button type="submit" class="btn btn-primary" onclick="codeSubmit()">Check Code</button>
     </form>
 
 {% endblock %}
