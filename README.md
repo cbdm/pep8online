@@ -1,5 +1,7 @@
-Pep8online
-=============
+![Pep8Online logo](https://raw.githubusercontent.com/johnroper100/pep8online/master/static/img/logo.png)
+
+Pep8Online
+==========
 
 This is web service for pep8 requirements checking.
 
