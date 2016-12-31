@@ -56,9 +56,9 @@ def check_text(text, temp_dir, logger=None):
     #clear all
     temp_outfile.close()
     code_file.close()
-    #os.remove(code_filename)
+    os.remove(code_filename)
     fullResultList = pep8parser(result)
-    fullResultList.sort(key=lambda x: (x['line'], x["place"]))
+    fullResultList.sort(key=lambda x: (int(x['line']), int(x["place"])))
     if logger:
         logger.debug(result)
     return fullResultList
