@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}PEP8 Online Check - Results{% endblock %}
+{% block content %}
+        {% if error %}
+            <h3 style="margin-top: 15px; margin-bottom: 0px;">{{ error }}</h3>
+        {% else %}
+<div style="clear: both">
+            {% if result %}
+                <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">Check results:</h3>
+            {% else %}
+                <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">All Right!</h3>
+            {% endif %}
+            <ul class="nav nav-pills" style="float: right; margin-top: 12px; margin-bottom: 5px;">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle active" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">Save</a>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="#" onclick="saveSubmit('/savecode', false)">Code</a>
+                        <a class="dropdown-item" href="#" onclick="saveSubmit('/saveresult', true)">Results as txt</a>
+    {#                   #}
+    {#                  <a class="dropdown-item" href="#" onclick="saveSubmit('/savepdf', true)">Results as pdf</a>#}
+    {#                    #}
+                    </div>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="#" role="button" onclick="shareResult('/s')">Share</a>
+                </li>
+            </ul>
+</div>
+            <h4 id="hidden_url_div" style="display: none">
+            URL: <a id="share_link"></a>
+            </h4>
+            {%  if result %}
+                <table class="table table-striped" id="result_table">
+                    <thead class="thead-inverse">
+                        <tr>
+                            <th>
+                                Code
+                            </th>
+                            <th>
+                                Line
+                            </th>
+                            <th>
+                                Column
+                            </th>
+                            <th>
+                                Text
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for res in result %}
+                        <tr class="tr-result">
+                            <td>
+                                {% if res.type == "W" %}
+                                    <span class="tag tag-warning">W{{ res.code }}</span>
+                                {% elif res.type == "E" %}
+                                    <span class="tag tag-danger">E{{ res.code }}</span>
+                                {% else %}
+                                    <span class="tag tag-danger">{{ res.code }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ res.line }}
+                            </td>
+                            <td>
+                                {{ res.place }}
+                            </td>
+                            <td>
+                                {{ res.text }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+
+                    </tbody>
+                </table>
+            {% endif %}
+        {%  endif %}
+        {% if error %}
+            <br>
+            <a href="/{{ back_url }}" class="btn btn-primary"><i class="icon-arrow-left"></i> Back</a>
+        {%  else %}
+            <h3 style="margin-top: 15px; margin-bottom: 0px;">Your Code:</h3>
+            <iframe class="hidden" name="save"></iframe>
+            <form class="hidden" name="original_code" action="" method="post">
+                <input type="hidden" id="orig_code" name="orig_code" value="{{ code_text }}">
+                <input type="hidden" id="orig_results" name="orig_results"
+                       value="{% for res in result -%}
+                                {{ res.type }}{{ res.code }}:{{ res.line }}:{{ res.place }}:{{ res.text }}
+                                {%- if not loop.last -%}:::{%- endif %}
+                              {%- endfor %}">
+            </form>
+
+            <form name="code_form" action="/checkresult" method="POST">
+                <div class="span12">
+                    <label for="code">
+                        <input type="hidden" id="code" name="code" value="">
+                    </label>
+                    <textarea id="editor">{{ code_text }}</textarea>
+                    <script src="/static/js/codemirror.js"></script>
+                    <script src="/static/js/python.js"></script>
+                    <script>
+                        var editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
+                            mode: {name: "python",
+                                   version: 3,
+                                   singleLineStringErrors: false},
+                            lineNumbers: true,
+                            indentUnit: 4,
+                            matchBrackets: true
+                        });
+                        var textarea = document.getElementById('code');
+                        textarea.value = editor.getValue();
+                        editor.setHighlightActiveLine(true);
+                        editor.getSession().on('change', function(){
+                            textarea.value = editor.getValue();
+                        });
+                        editor.gotoLine(1);
+
+                        var resTable = document.getElementById('result_table');
+                        var editorText = document.getElementsByClassName('ace_text-layer');
+                        if (resTable) {
+                            resTable.onclick = function(event) {
+                                event = event || window.event;
+                                var target = event.target || event.srcElement;
+                                while (target != this) {
+                                    if (target.tagName == 'TR') {
+                                        var rowTds = target.getElementsByTagName('td');
+                                        if (rowTds.length <= 2) {
+                                            target = target.parentNode;
+                                            continue;
+                                        }
+                                        var lineNumber = target.getElementsByTagName('td')[1].innerText;
+                                        lineNumber = parseInt(lineNumber);
+                                        if (!isNaN(lineNumber)) {
+                                            editorText[0].scrollIntoView();
+                                            editor.gotoLine(lineNumber);
+                                            return;
+                                        } else {
+                                            target = target.parentNode;
+                                            continue;
+                                        }
+                                    }
+                                    target = target.parentNode;
+                                }
+                            };
+                        }
+
+                        function codeSubmit() {
+                            textarea.value = editor.getSession().getValue();
+                            document.forms['code_form'].submit();
+                        }
+
+                        function saveSubmit(url, result) {
+                            var form = document.forms['original_code'];
+                            form.action = url;
+                            if (result) {
+                                var orig_results = document.getElementsByName('orig_results');
+                            }
+                            form.submit()
+                        }
+
+                        function shareResult(url) {
+                            var code = $("#orig_code").val();
+                            var results = $("#orig_results").val();
+                            var response = $.ajax({
+                                url:url,
+                                type:"POST",
+                                data:{
+                                    code:code,
+                                    results:results
+                                },
+                                datatype:"text"
+                            }).done(function (oid) {
+                                        var link = "http://pep8online.com/s/" + oid;
+                                        var $share_link = $("#share_link");
+                                        $share_link.html("http://pep8online.com/s/" + oid);
+                                        $share_link.attr("href", link);
+                                        $("#hidden_url_div").show(200);
+                                    });
+
+                        }
+
+                    </script>
+                    <br>
+                    <button type="submit" class="btn btn-primary" onclick="codeSubmit()">Check Again</button>
+                </div>
+            </form>
+    {% endif %}
+
+{% endblock %}

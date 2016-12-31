@@ -1,62 +1,60 @@
 {% extends "base.html" %}
-{% block title %}PEP8 online check - Results{% endblock %}
+{% block title %}PEP8 Online Check - Results{% endblock %}
 {% block content %}
         {% if error %}
-            <h2>{{ error }}</h2>
+            <h3 style="margin-top: 15px; margin-bottom: 0px;">{{ error }}</h3>
         {% else %}
+<div style="clear: both">
             {% if result %}
-                <h1 class="inline-header">Check results</h1>
+                <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">Check Your Results:</h3>
             {% else %}
-                <h1 class="inline-header">All right</h1>
+                <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">All Right!</h3>
             {% endif %}
-            <ul class="nav nav-pills inline-header">
-                <li class="dropdown">
-                    <a class="dropdown-toggle"data-toggle="dropdown" role="button" href="#">Save <b class="caret"></b></a>
-                    <ul class="dropdown-menu" role="menu" aria-labelledby="dLabel">
-                        <li>
-                            <a href="#" onclick="saveSubmit('/savecode', false)">Code</a>
-                        </li>
-                        <li>
-                            <a href="#" onclick="saveSubmit('/saveresult', true)">Results as txt</a>
-                        </li>
-    {#                    <li>#}
-    {#                        <a href="#" onclick="saveSubmit('/savepdf', true)">Results as pdf</a>#}
-    {#                    </li>#}
-                    </ul>
+            <ul class="nav nav-pills" style="float: right; margin-top: 12px; margin-bottom: 5px;">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle active" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">Save</a>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="#" onclick="saveSubmit('/savecode', false)">Code</a>
+                        <a class="dropdown-item" href="#" onclick="saveSubmit('/saveresult', true)">Results as txt</a>
+    {#                   #}
+    {#                  <a class="dropdown-item" href="#" onclick="saveSubmit('/savepdf', true)">Results as pdf</a>#}
+    {#                    #}
+                    </div>
                 </li>
-                <li>
-                    <a role="button" href="#" onclick="shareResult('/s')">Share</a>
+                <li class="nav-item">
+                    <a class="nav-link active" href="#" role="button" onclick="shareResult('/s')">Share</a>
                 </li>
             </ul>
+</div>
             <h4 id="hidden_url_div" style="display: none">
             URL: <a id="share_link"></a>
             </h4>
             {%  if result %}
-                <table class="table" id="result_table">
-                    <thead>
-                    <tr>
-                        <th>
-                            Code
-                        </th>
-                        <th>
-                            Line
-                        </th>
-                        <th>
-                            Column
-                        </th>
-                        <th>
-                            Text
-                        </th>
-                    </tr>
+                <table class="table table-striped" id="result_table">
+                    <thead class="thead-inverse">
+                        <tr>
+                            <th>
+                                Code
+                            </th>
+                            <th>
+                                Line
+                            </th>
+                            <th>
+                                Column
+                            </th>
+                            <th>
+                                Text
+                            </th>
+                        </tr>
                     </thead>
                     <tbody>
                     {% for res in result %}
                         <tr class="tr-result">
                             <td>
                                 {% if res.type == "W" %}
-                                    <span class="label label-warning">W{{ res.code }}</span>
+                                    <span class="tag tag-warning">W{{ res.code }}</span>
                                 {% elif res.type == "E" %}
-                                    <span class="label label-important">E{{ res.code }}</span>
+                                    <span class="tag tag-danger">E{{ res.code }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -76,9 +74,10 @@
             {% endif %}
         {%  endif %}
         {% if error %}
-            <a href="/{{ back_url }}" class="btn"><i class="icon-arrow-left"></i> Back</a>
+            <br>
+            <a href="/{{ back_url }}" class="btn btn-primary"><i class="icon-arrow-left"></i> Back</a>
         {%  else %}
-            <h2>Your code</h2>
+            <h3 style="margin-top: 15px; margin-bottom: 0px;">Your Code:</h3>
             <iframe class="hidden" name="save"></iframe>
             <form class="hidden" name="original_code" action="" method="post">
                 <input type="hidden" id="orig_code" name="orig_code" value="{{ code_text }}">
@@ -94,19 +93,30 @@
                     <label for="code">
                         <input type="hidden" id="code" name="code" value="">
                     </label>
-                    <pre id="editor" style="padding: 0px;">{{ code_text }}</pre>
-                    <script src="/static/ace/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
+                    <textarea id="editor">{{ code_text }}</textarea>
+                    <script src="/static/js/codemirror.js"></script>
+                    <script src="/static/js/python.js"></script>
                     <script>
-                        var editor = ace.edit("editor");
-                        var textarea = document.getElementById('code');
-                        textarea.value = editor.getSession().getValue();
-                        editor.setTheme("ace/theme/chrome");
-                        editor.getSession().setMode("ace/mode/python");
-                        editor.setHighlightActiveLine(true);
-                        editor.getSession().on('change', function(){
-                            textarea.value = editor.getSession().getValue();
+                        function jumpToLine(i) { 
+                            var t = editor.charCoords({line: i, ch: 0}, "local").top; 
+                            var middleHeight = editor.getScrollerElement().offsetHeight / 2; 
+                            editor.scrollTo(null, t - middleHeight - 5); 
+                        } 
+                        var editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
+                            mode: {name: "python",
+                                   version: 3,
+                                   singleLineStringErrors: false},
+                            lineNumbers: true,
+                            indentUnit: 4,
+                            styleActiveLine: true,
+                            matchBrackets: true
                         });
-                        editor.gotoLine(1);
+                        var textarea = document.getElementById('code');
+                        textarea.value = editor.getValue();
+                        editor.on('change', function(){
+                            textarea.value = editor.getValue();
+                        });
+                        jumpToLine(1);
 
                         var resTable = document.getElementById('result_table');
                         var editorText = document.getElementsByClassName('ace_text-layer');
@@ -173,7 +183,8 @@
                         }
 
                     </script>
-                    <button type="submit" class="btn span3" onclick="codeSubmit()">Check again</button>
+                    <br>
+                    <button type="submit" class="btn btn-primary" onclick="codeSubmit()">Check Again</button>
                 </div>
             </form>
     {% endif %}

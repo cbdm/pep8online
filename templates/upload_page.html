@@ -1,22 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
 
-    <form name="upload_file" action="/checkresult" method="POST"
+    <form class="form-inline" name="upload_file" action="/checkresult" method="POST"
           enctype=multipart/form-data class="form-horizontal no-bottom-margin"
           onsubmit="return submitFileForm();">
-        <legend>Upload python file</legend>
-
-        <label for="filename">
-            <div class="input-append">
-                <input id="filename" type="text">
-                <button class="btn" type="button" onclick="fileUploadClick()">
-                    Select File
-                </button>
-            </div>
-        </label>
-
-        <div class="control-group">
-            <button type="submit" class="btn span4">Check code</button>
+        <h3 style="margin-top: 15px; margin-bottom: 25px;">Upload Python File:</h3>
+        
+        <div class="form-group">
+            <input type="text" class="form-control" id="filename">
+            <button type="button" class="btn btn-primary" onclick="fileUploadClick()">Select File</button>
+        </div>
+        <br><br>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">Check Code</button>
             <span id="error" class="control-label"></span>
         </div>
         <input type="file" name="code_file" class="hidden_upload" id="code_file"

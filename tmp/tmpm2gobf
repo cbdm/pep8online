@@ -1,0 +1,1158 @@
+# Copyright 2016 John Roper
+#
+# ##### BEGIN GPL LICENSE BLOCK ######
+# This file is part of Documen.
+#
+# Documen is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Documen is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Documen.  If not, see <http://www.gnu.org/licenses/>.
+# ##### END GPL LICENSE BLOCK #####
+import bpy
+import os
+import datetime
+import time
+import subprocess
+
+global pathImages
+global pathImagesHtml
+global pathStyle
+global pathStyleHtml
+
+
+# ------------------------------------------------------------------------------
+# Generate HTML file
+# ------------------------------------------------------------------------------
+def write_html(outpath, documen_include_render, documen_include_rsettings, documen_include_difference, documen_base_file, documen_include_outputinfo, documen_only_render, documen_include_header, documen_include_story, documen_story_type, documen_threshold, documen_include_images, documen_include_links, documen_typecolor, custom_documen_typecolor, documen_grease):
+    # -------------------------------
+    # extract path and filename
+    # -------------------------------
+    (filepath, filename) = os.path.split(outpath)
+    print("=====================================================")
+    print('Exporting %s' % filename)
+    # -------------------------------
+    # Create output directories
+    # -------------------------------
+    # Images
+    global pathImagesHtml
+    pathImagesHtml = "img_" + get_filename(filename.replace(" ", "_")).lower()
+    directory = os.path.join(filepath, pathImagesHtml)
+
+    global pathImages
+    pathImages = directory
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    # Styles
+    global pathStyleHtml
+    directory = os.path.join(filepath, "assets")
+    pathStyleHtml = "assets"
+
+    global pathStyle
+    pathStyle = directory
+
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    # -------------------------------
+    # copy style sheets to assets
+    # -------------------------------
+    fromcss = os.path.join(os.path.dirname(__file__), "template/css")
+    copy_binfile(os.path.join(fromcss, "bootstrap.min.css"), os.path.join(pathStyle, "bootstrap.min.css"))
+
+    # -------------------------------
+    # copy scripts to assets
+    # -------------------------------
+    fromjs = os.path.join(os.path.dirname(__file__), "template/js")
+    copy_binfile(os.path.join(fromjs, "bootstrap.min.js"), os.path.join(pathStyle, "bootstrap.min.js"))
+    copy_binfile(os.path.join(fromjs, "jquery.min.js"), os.path.join(pathStyle, "jquery.min.js"))
+    copy_binfile(os.path.join(fromjs, "tether.min.js"), os.path.join(pathStyle, "tether.min.js"))
+    copy_binfile(os.path.join(fromjs, "imagesloaded.pkgd.min.js"), os.path.join(pathStyle, "imagesloaded.pkgd.min.js"))
+    copy_binfile(os.path.join(fromjs, "masonry.pkgd.min.js"), os.path.join(pathStyle, "masonry.pkgd.min.js"))
+
+    # -------------------------------
+    # copy support images to assets
+    # -------------------------------
+    fromimg = os.path.join(os.path.dirname(__file__), "template/images")
+    copy_binfile(os.path.join(fromimg, "whitenoise.png"), os.path.join(pathStyle, "whitenoise.png"))
+
+    # -------------------------------
+    # export the images
+    # to a new folder
+    # -------------------------------
+    #if documen_include_images is True:
+        #export_images(pathImages)
+    # -------------------------------
+    # Open output file
+    # -------------------------------
+    realpath = os.path.realpath(os.path.expanduser(outpath))
+    fout = open(realpath, 'w')
+
+    # -------------------------------
+    # generate html
+    # -------------------------------
+    finput = open(os.path.join(os.path.dirname(__file__), "template", "doc_template.html"))
+    line = finput.readline()
+    while line:
+        if "<!--TITLE-->" in line:
+            html_title(fout, line)
+        elif "<!--STYLE-->" in line:
+            html_style(fout, line)
+        elif "<!--BCKCOLOR-->" in line:
+            html_bckcolor(fout, line, documen_typecolor, custom_documen_typecolor)
+        elif "<!--INFO-->" in line:
+            if documen_include_header is True:
+                html_info(fout)
+        elif "<!--OUTPUTINFO-->" in line:
+            if documen_include_outputinfo is True:
+                html_outputinfo(fout)
+        elif "<!--RENDERSETTINGS-->" in line:
+            if documen_include_rsettings is True:
+                html_rsettings(fout)
+        elif "<!--DIFFERENCE-->" in line:
+            if documen_include_difference is True:
+                html_difference(fout)
+        elif "<!--RENDER-->" in line:
+            if documen_include_render is True:
+                html_render(pathImages, fout, filename, documen_only_render)
+        elif "<!--STORYBOARD-->" in line:
+            if int(documen_include_story) > 0:
+                html_storyboard(pathImages, fout, filename, documen_only_render, documen_include_story, documen_story_type, documen_threshold, documen_grease,
+                                documen_include_header)
+        elif "<!--IMAGES-->" in line:
+            if documen_include_images is True:
+                html_images(fout)
+        elif "<!--LINKS-->" in line:
+            if documen_include_links is True:
+                html_links(fout)
+        elif "<!--DOCINFO-->" in line:
+            html_docinfo(fout)
+        elif "<!--TIME-->" in line:
+            html_time(fout)
+        else:
+            fout.write(line)
+        line = finput.readline()
+    finput.close()
+
+    fout.close()
+    print('%s successfully exported' % realpath)
+    print("=====================================================")
+
+    return
+
+
+# -------------------------------------
+# Copy bin file
+# -------------------------------------
+def copy_binfile(fromfile, tofile):
+    with open(fromfile, 'rb') as f1:
+        with open(tofile, 'wb') as f2:
+            while True:
+                mybytes = f1.read(1024)
+                if mybytes:
+                    f2.write(mybytes)
+                else:
+                    break
+
+
+# -------------------------------------
+# Get Color mode function
+# -------------------------------------
+def find_color_mode(image):
+    if not isinstance(image, bpy.types.Image):
+        raise TypeError
+    else:
+        # if image.depth <= 8:
+        #    return 'BW'
+        if image.depth <= 8:
+            return 'RGB'
+        else:
+            return 'RGBA'
+
+
+# -------------------------------------
+# Set only render status
+# -------------------------------------
+def set_documen_only_render(status):
+    bpy.context.space_data.show_only_render = status
+
+# -------------------------------------
+# Get file name (no extension)
+# -------------------------------------
+
+
+def get_filename(filepath):
+    return os.path.splitext(filepath)[0]
+
+
+# -------------------------------------
+# Set viewport to camera
+# -------------------------------------
+def setcameraview():
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            area.spaces[0].region_3d.view_perspective = 'CAMERA'
+
+
+# ------------------------------------------
+# Adjust aspect ratio to new size
+#
+# width/height define original image size
+#
+# sizeX/Y define the maximum box
+# for final image
+#
+# Return new image sizes.
+# ------------------------------------------
+def ratio(width, height, sizex=128, sizey=128):
+    renderx = sizex
+    rendery = sizey
+
+    # avoid errors
+    if width == 0:
+        width = 128
+
+    if height == 0:
+        height = 128
+
+    if width > height:
+        rendery = (height * renderx) / width
+    else:
+        renderx = (width * rendery) / height
+
+    return [int(renderx), int(rendery)]
+
+
+# -------------------------------------
+# Update title
+# -------------------------------------
+def html_title(fhandle, line):
+    (filepath, filename) = os.path.split(bpy.data.filepath)
+    if filename == "":
+        line = line.replace("<!--TITLE-->", "UNTITLED")
+    else:
+        line = line.replace("<!--TITLE-->", filename)
+    fhandle.write(line)
+
+
+# -------------------------------------
+# Update back color
+# -------------------------------------
+def html_bckcolor(fhandle, line, documen_typecolor, custom_documen_typecolor):
+    if documen_typecolor == "custom":
+        if "#" in custom_documen_typecolor:
+            line = line.replace("<!--BCKCOLOR-->", custom_documen_typecolor)
+        else:
+            line = line.replace("<!--BCKCOLOR-->", "#"+custom_documen_typecolor)
+    else:
+        line = line.replace("<!--BCKCOLOR-->", documen_typecolor)
+    fhandle.write(line)
+
+
+# -------------------------------------
+# Update style location
+# -------------------------------------
+def html_style(fhandle, line):
+    line = line.replace("<!--STYLE-->", pathStyleHtml)
+    fhandle.write(line)
+
+
+# -------------------------------------
+# Update time
+# -------------------------------------
+def html_time(fhandle):
+    ts = time.time()
+    st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+    fhandle.write("<h1 class=\"navbar-brand mb-0 float-md-right\"><small>"+st+"</small></h1>")
+
+
+# -------------------------------------
+# Documen info
+# -------------------------------------
+def html_docinfo(fhandle):
+    fhandle.write(
+        "<p class=\"float-md-right\">Page generated by <a href=\"http://jmroper.com\" target=\"_blank\">Documen</a></p>\n")
+
+
+# -------------------------------------
+# Create info table
+# -------------------------------------
+def html_info(fhandle):
+    fhandle.write("<div class=\"card card-block\" id=\"fileinfo\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>File Info:</h3>\n")
+    fhandle.write("<hr>\n")
+    fhandle.write("<div class=\"table-responsive\">\n")
+    fhandle.write("<table class=\"table table-striped\">\n")
+    fhandle.write("<thead class=\"thead-inverse\">\n")
+    fhandle.write("<tr>\n")
+    fhandle.write("<th>Filename</th>\n")
+    fhandle.write("<th>Scene Name</th>\n")
+    fhandle.write("<th>Render Engine</th>\n")
+    fhandle.write("<th>Render Size</th>\n")
+    fhandle.write("<th>Start Frame</th>\n")
+    fhandle.write("<th>End Frame</th>\n")
+    fhandle.write("<th>FPS</th>\n")
+    fhandle.write("</tr>\n")
+    fhandle.write("</thead>\n")
+    fhandle.write("<tbody>\n")
+    fhandle.write("<tr>\n")
+    # blend name
+    (filepath, filename) = os.path.split(bpy.data.filepath)
+    if filename == "":
+        filename = "UNTITLED"
+    fhandle.write("<th scope=\"row\">"+filename+"</th>\n")
+    # scene name
+    current_scene = bpy.context.scene
+    fhandle.write("<td>"+current_scene.name+"</td>")
+    # render engine
+    fhandle.write("<td>"+current_scene.render.engine.lower().title()+"</td>")
+    # render size
+    fhandle.write("<td>"+str(current_scene.render.resolution_x)+"x"+str(current_scene.render.resolution_y)+"</td>")
+    # start frame
+    fhandle.write("<td>"+str(current_scene.frame_start)+"</td>")
+    # end frame
+    fhandle.write("<td>"+str(current_scene.frame_end)+"</td>")
+    # fps
+    fhandle.write("<td>"+str(current_scene.render.fps)+"</td>")
+    fhandle.write("</tr>\n")
+    fhandle.write("</tbody>\n")
+    fhandle.write("</table>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Create output info table
+# -------------------------------------
+def html_outputinfo(fhandle):
+    bpy.context.scene.use_nodes = True
+    tree = bpy.context.scene.node_tree
+    links = tree.links
+
+    fhandle.write("<div class=\"card card-block\" id=\"outputinfo\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>Output Info:</h3>\n")
+    fhandle.write("<hr>\n")
+    fhandle.write("<p><b>Global Output Path: </b>"+bpy.context.scene.render.filepath+"</p>\n")
+    fhandle.write("<div class=\"table-responsive\">\n")
+    fhandle.write("<table class=\"table table-striped\">\n")
+    fhandle.write("<thead class=\"thead-inverse\">\n")
+    fhandle.write("<tr>\n")
+    fhandle.write("<th>Node Name</th>\n")
+    fhandle.write("<th>Output Path</th>\n")
+    fhandle.write("</tr>\n")
+    fhandle.write("</thead>\n")
+    fhandle.write("<tbody>\n")
+    flagoutput = False
+    for n in tree.nodes:
+        if n.type == "OUTPUT_FILE":
+            fhandle.write("<tr>\n")
+            fhandle.write("<th scope=\"row\">"+n.name+"</th>\n")
+            fhandle.write("<td>"+n.base_path+"</td>\n")
+            fhandle.write("</tr>\n")
+            flagoutput = True
+
+    if not flagoutput:
+        fhandle.write("<tr>\n")
+        fhandle.write("<td colspan=\"2\">No  file output nodes were found in the .blend file!</td>")
+        fhandle.write("</tr>\n")
+    fhandle.write("</tbody>\n")
+    fhandle.write("</table>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Create differences table
+# -------------------------------------
+def html_difference(fhandle):
+    scene = scene = bpy.context.scene
+    current_blend_path = bpy.data.filepath.replace(".blend", ".info")
+
+    info_file = open(current_blend_path, 'w')
+
+    info_file.write("Device: "+bpy.context.scene.cycles.device+"\n")
+    info_file.write("Resolution: "+str(bpy.context.scene.render.resolution_x)+"x"+str(bpy.context.scene.render.resolution_y)+"\n")
+    info_file.write("Resolution Scale: "+str(bpy.context.scene.render.resolution_percentage)+"%\n")
+    info_file.write("Start Frame: "+str(bpy.context.scene.frame_start)+"\n")
+    info_file.write("End Frame: "+str(bpy.context.scene.frame_end)+"\n")
+    info_file.write("Frame Step: "+str(bpy.context.scene.frame_step)+"\n")
+    info_file.write("File Format: "+bpy.context.scene.render.image_settings.file_format+"\n")
+    info_file.write("Color Mode: "+bpy.context.scene.render.image_settings.color_mode+"\n")
+    if bpy.context.scene.render.engine == 'CYCLES':
+        info_file.write("Tracing Mode: "+bpy.context.scene.cycles.progressive+"\n")
+        info_file.write("Square Samples: "+str(bpy.context.scene.cycles.use_square_samples)+"\n")
+        if bpy.context.scene.cycles.progressive == 'PATH':
+            info_file.write("Render Samples: "+str(bpy.context.scene.cycles.samples)+"\n")
+            info_file.write("Preview Samples: "+str(bpy.context.scene.cycles.preview_samples)+"\n")
+        elif bpy.context.scene.cycles.progressive == 'BRANCHED_PATH':
+            info_file.write("Diffuse Samples: "+str(bpy.context.scene.cycles.diffuse_samples)+"\n")
+            info_file.write("Glossy Samples: "+str(bpy.context.scene.cycles.glossy_samples)+"\n")
+            info_file.write("Transmission Samples: "+str(bpy.context.scene.cycles.transmission_samples)+"\n")
+            info_file.write("AO Samples: "+str(bpy.context.scene.cycles.ao_samples)+"\n")
+            info_file.write("Mesh Light Samples: "+str(bpy.context.scene.cycles.mesh_light_samples)+"\n")
+            info_file.write("Subsurface Samples: "+str(bpy.context.scene.cycles.subsurface_samples)+"\n")
+            info_file.write("Volume Samples: "+str(bpy.context.scene.cycles.volume_samples)+"\n")
+            info_file.write("AA Render Samples: "+str(bpy.context.scene.cycles.aa_samples)+"\n")
+            info_file.write("AA Preview Samples: "+str(bpy.context.scene.cycles.preview_aa_samples)+"\n")
+            info_file.write("Sample All Direct Lights: "+str(bpy.context.scene.cycles.sample_all_lights_direct)+"\n")
+            info_file.write("Sample All Indirect Lights: "+str(bpy.context.scene.cycles.sample_all_lights_indirect)+"\n")
+        info_file.write("Sampling Pattern: "+bpy.context.scene.cycles.sampling_pattern+"\n")
+        info_file.write("Seed: "+str(bpy.context.scene.cycles.seed)+"\n")
+        info_file.write("Use Animated Seed: "+str(bpy.context.scene.cycles.use_animated_seed)+"\n")
+        info_file.write("Clamp Direct: "+str(bpy.context.scene.cycles.sample_clamp_direct)+"\n")
+        info_file.write("Clamp Indirect: "+str(bpy.context.scene.cycles.sample_clamp_indirect)+"\n")
+        info_file.write("Light Sampling documen_threshold: "+str(bpy.context.scene.cycles.light_sampling_threshold)+"\n")
+        info_file.write("Volume Step Size: "+str(bpy.context.scene.cycles.volume_step_size)+"\n")
+        info_file.write("Volume Max Steps: "+str(bpy.context.scene.cycles.volume_max_steps)+"\n")
+        info_file.write("Transparency Max Bounces: "+str(bpy.context.scene.cycles.transparent_max_bounces)+"\n")
+        info_file.write("Transparency Min Bounces: "+str(bpy.context.scene.cycles.transparent_min_bounces)+"\n")
+        info_file.write("Max Bounces: "+str(bpy.context.scene.cycles.max_bounces)+"\n")
+        info_file.write("Min Bounces: "+str(bpy.context.scene.cycles.min_bounces)+"\n")
+        info_file.write("Diffuse Bounces: "+str(bpy.context.scene.cycles.diffuse_bounces)+"\n")
+        info_file.write("Glossy Bounces: "+str(bpy.context.scene.cycles.glossy_bounces)+"\n")
+        info_file.write("Transmission Bounces: "+str(bpy.context.scene.cycles.transmission_bounces)+"\n")
+        info_file.write("Volume Bounces: "+str(bpy.context.scene.cycles.volume_bounces)+"\n")
+        info_file.write("Use Transparent Shadows: "+str(bpy.context.scene.cycles.use_transparent_shadows)+"\n")
+        info_file.write("Reflective Caustics: "+str(bpy.context.scene.cycles.caustics_reflective)+"\n")
+        info_file.write("Refractive Caustics: "+str(bpy.context.scene.cycles.caustics_refractive)+"\n")
+        info_file.write("Filter Glossy: "+str(bpy.context.scene.cycles.blur_glossy)+"\n")
+        info_file.write("Use Motion Blur: "+str(bpy.context.scene.render.use_motion_blur)+"\n")
+        if bpy.context.scene.render.use_motion_blur:
+            info_file.write("Motion Blur Position: "+bpy.context.scene.cycles.motion_blur_position+"\n")
+            info_file.write("Motion Blur Shutter: "+str(bpy.context.scene.render.motion_blur_shutter)+"\n")
+            info_file.write("Motion Blur Shutter Type: "+bpy.context.scene.cycles.rolling_shutter_type+"\n")
+            if bpy.context.scene.cycles.rolling_shutter_type == 'TOP':
+                info_file.write("Motion Blur Rolling Shutter Duration: "+str(bpy.context.scene.cycles.rolling_shutter_duration)+"\n")
+    elif bpy.context.scene.render.engine == 'BLENDER_RENDER':
+        info_file.write("Use Anti-Aliasing: "+str(bpy.context.scene.render.use_antialiasing)+"\n")
+        if bpy.context.scene.render.use_antialiasing:
+            info_file.write("Anti-Aliasing Samples: "+bpy.context.scene.render.antialiasing_samples+"\n")
+            info_file.write("Use Anti-Aliasing Full Sample: "+str(bpy.context.scene.render.use_full_sample)+"\n")
+            info_file.write("Anti-Aliasing Pixel Filter Type: "+bpy.context.scene.render.pixel_filter_type+"\n")
+            info_file.write("Anti-Aliasing Filter Size: "+str(bpy.context.scene.render.filter_size)+"\n")
+        info_file.write("Use Motion Blur: "+str(bpy.context.scene.render.use_motion_blur)+"\n")
+        if bpy.context.scene.render.use_motion_blur:
+            info_file.write("Motion Blur Samples: "+str(bpy.context.scene.render.motion_blur_samples)+"\n")
+            info_file.write("Motion blur Shutter: "+str(bpy.context.scene.render.motion_blur_shutter)+"\n")
+        info_file.write("Use Textures: "+str(bpy.context.scene.render.use_textures)+"\n")
+        info_file.write("Use Shadows: "+str(bpy.context.scene.render.use_shadows)+"\n")
+        info_file.write("Use Subsurface Scattering: "+str(bpy.context.scene.render.use_sss)+"\n")
+        info_file.write("Use Environment Maps: "+str(bpy.context.scene.render.use_envmaps)+"\n")
+        info_file.write("Use Raytracing: "+str(bpy.context.scene.render.use_raytrace)+"\n")
+        info_file.write("Alpha: "+bpy.context.scene.render.alpha_mode+"\n")
+        info_file.write("Use World Space Shading: "+str(bpy.context.scene.render.use_world_space_shading)+"\n")
+    info_file.write("Threads Mode: "+bpy.context.scene.render.threads_mode+"\n")
+    info_file.write("Threads: "+str(bpy.context.scene.render.threads)+"\n")
+    info_file.write("Tile Order: "+bpy.context.scene.cycles.tile_order+"\n")
+    info_file.write("Tile X: "+str(bpy.context.scene.render.tile_x)+"\n")
+    info_file.write("Tile Y: "+str(bpy.context.scene.render.tile_y)+"\n")
+
+    info_file.close()
+
+    subprocess.call([bpy.app.binary_path, '-b', '-P', os.path.join(os.path.dirname(os.path.abspath(__file__)), "export_render_settings.py"), scene.documen_base_file])
+
+    base_info_file = scene.documen_base_file.replace(".blend", ".info")
+
+    fhandle.write("<div class=\"card card-block\" id=\"fileinfo\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>Render Setting Differences: <span class=\"float-md-right\"><small>Checked Against: <i>"+scene.documen_base_file+"</i></small></span></h3>\n")
+    fhandle.write("<hr>\n")
+    with open(current_blend_path) as textfile1, open(base_info_file) as textfile2:
+        for x, y in zip(textfile1, textfile2):
+            x = x.strip()
+            y = y.strip()
+
+            if x != y:
+                fhandle.write("<p><b>Different:</b> "+x+" <b>From:</b> "+y+"</p>\n")
+                print(x)
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+    os.remove(current_blend_path)
+    os.remove(base_info_file)
+
+
+# --------------------------------------------
+# Create detailed render settings info table
+# --------------------------------------------
+def html_rsettings(fhandle):
+    fhandle.write("<div class=\"card card-block\" id=\"rendersettings\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>Detailed Render Settings:</h3>\n")
+    fhandle.write("<hr>\n")
+    fhandle.write("<div class=\"row masonry-container\">\n")
+    fhandle.write("<div class=\"col-md-4 item\">\n")
+    fhandle.write("<ul class=\"list-group\">\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Device:</b> "+bpy.context.scene.cycles.device+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Resolution:</b> "+str(bpy.context.scene.render.resolution_x)+"x"+str(bpy.context.scene.render.resolution_y)+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Resolution Scale:</b> "+str(bpy.context.scene.render.resolution_percentage)+"%</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Start Frame:</b> "+str(bpy.context.scene.frame_start)+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>End Frame:</b> "+str(bpy.context.scene.frame_end)+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Frame Step:</b> "+str(bpy.context.scene.frame_step)+"</li>\n")
+    fhandle.write("</ul>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("<div class=\"col-md-4 item\">\n")
+    fhandle.write("<ul class=\"list-group\">\n")
+    fhandle.write("<li class=\"list-group-item\"><b>File Format:</b> "+bpy.context.scene.render.image_settings.file_format+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Color Mode:</b> "+bpy.context.scene.render.image_settings.color_mode+"</li>\n")
+    fhandle.write("</ul>\n")
+    fhandle.write("</div>\n")
+    if bpy.context.scene.render.engine == 'CYCLES':
+        fhandle.write("<div class=\"col-md-4 item\">\n")
+        fhandle.write("<ul class=\"list-group\">\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Tracing Mode:</b> "+bpy.context.scene.cycles.progressive+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Square Samples:</b> "+str(bpy.context.scene.cycles.use_square_samples)+"</li>\n")
+        if bpy.context.scene.cycles.progressive == 'PATH':
+            fhandle.write("<li class=\"list-group-item\"><b>Render Samples:</b> "+str(bpy.context.scene.cycles.samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Preview Samples:</b> "+str(bpy.context.scene.cycles.preview_samples)+"</li>\n")
+            fhandle.write("</div>\n")
+            fhandle.write("<div class=\"col-md-4 item\">\n")
+            fhandle.write("<br>\n")
+            fhandle.write("<ul class=\"list-group\">\n")
+        elif bpy.context.scene.cycles.progressive == 'BRANCHED_PATH':
+            fhandle.write("<li class=\"list-group-item\"><b>Diffuse Samples:</b> "+str(bpy.context.scene.cycles.diffuse_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Glossy Samples:</b> "+str(bpy.context.scene.cycles.glossy_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Transmission Samples:</b> "+str(bpy.context.scene.cycles.transmission_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>AO Samples:</b> "+str(bpy.context.scene.cycles.ao_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Mesh Light Samples:</b> "+str(bpy.context.scene.cycles.mesh_light_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Subsurface Samples:</b> "+str(bpy.context.scene.cycles.subsurface_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Volume Samples:</b> "+str(bpy.context.scene.cycles.volume_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>AA Render Samples:</b> "+str(bpy.context.scene.cycles.aa_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>AA Preview Samples:</b> "+str(bpy.context.scene.cycles.preview_aa_samples)+"</li>\n")
+            fhandle.write("</ul>\n")
+            fhandle.write("</div>\n")
+            fhandle.write("<div class=\"col-md-4 item\">\n")
+            fhandle.write("<br>\n")
+            fhandle.write("<ul class=\"list-group\">\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Sample All Direct Lights:</b> "+str(bpy.context.scene.cycles.sample_all_lights_direct)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Sample All Indirect Lights:</b> "+str(bpy.context.scene.cycles.sample_all_lights_indirect)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Sampling Pattern:</b> "+bpy.context.scene.cycles.sampling_pattern+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Seed:</b> "+str(bpy.context.scene.cycles.seed)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Animated Seed:</b> "+str(bpy.context.scene.cycles.use_animated_seed)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Clamp Direct:</b> "+str(bpy.context.scene.cycles.sample_clamp_direct)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Clamp Indirect:</b> "+str(bpy.context.scene.cycles.sample_clamp_indirect)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Light Sampling documen_threshold:</b> "+str(bpy.context.scene.cycles.light_sampling_threshold)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Volume Step Size:</b> "+str(bpy.context.scene.cycles.volume_step_size)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Volume Max Steps:</b> "+str(bpy.context.scene.cycles.volume_max_steps)+"</li>\n")
+        fhandle.write("</ul>\n")
+        fhandle.write("</div>\n")
+        fhandle.write("<div class=\"col-md-4 item\">\n")
+        fhandle.write("<br>\n")
+        fhandle.write("<ul class=\"list-group\">\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Transparency Max Bounces:</b> "+str(bpy.context.scene.cycles.transparent_max_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Transparency Min Bounces:</b> "+str(bpy.context.scene.cycles.transparent_min_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Max Bounces:</b> "+str(bpy.context.scene.cycles.max_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Min Bounces:</b> "+str(bpy.context.scene.cycles.min_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Diffuse Bounces:</b> "+str(bpy.context.scene.cycles.diffuse_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Glossy Bounces:</b> "+str(bpy.context.scene.cycles.glossy_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Transmission Bounces:</b> "+str(bpy.context.scene.cycles.transmission_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Volume Bounces:</b> "+str(bpy.context.scene.cycles.volume_bounces)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Transparent Shadows:</b> "+str(bpy.context.scene.cycles.use_transparent_shadows)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Reflective Caustics:</b> "+str(bpy.context.scene.cycles.caustics_reflective)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Refractive Caustics:</b> "+str(bpy.context.scene.cycles.caustics_refractive)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Filter Glossy:</b> "+str(bpy.context.scene.cycles.blur_glossy)+"</li>\n")
+        fhandle.write("</ul>\n")
+        fhandle.write("</div>\n")
+        fhandle.write("<div class=\"col-md-4 item\">\n")
+        fhandle.write("<br>\n")
+        fhandle.write("<ul class=\"list-group\">\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Motion Blur:</b> "+str(bpy.context.scene.render.use_motion_blur)+"</li>\n")
+        if bpy.context.scene.render.use_motion_blur:
+            fhandle.write("<li class=\"list-group-item\"><b>Motion Blur Position:</b> "+bpy.context.scene.cycles.motion_blur_position+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Motion Blur Shutter:</b> "+str(bpy.context.scene.render.motion_blur_shutter)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Motion Blur Shutter Type:</b> "+bpy.context.scene.cycles.rolling_shutter_type+"</li>\n")
+            if bpy.context.scene.cycles.rolling_shutter_type == 'TOP':
+                fhandle.write("<li class=\"list-group-item\"><b>Motion Blur Rolling Shutter Duration:</b> "+str(bpy.context.scene.cycles.rolling_shutter_duration)+"</li>\n")
+        fhandle.write("</ul>\n")
+        fhandle.write("</div>\n")
+    elif bpy.context.scene.render.engine == 'BLENDER_RENDER':
+        fhandle.write("<div class=\"col-md-4 item\">\n")
+        fhandle.write("<ul class=\"list-group\">\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Anti-Aliasing:</b> "+str(bpy.context.scene.render.use_antialiasing)+"</li>\n")
+        if bpy.context.scene.render.use_antialiasing:
+            fhandle.write("<li class=\"list-group-item\"><b>Anti-Aliasing Samples:</b> "+bpy.context.scene.render.antialiasing_samples+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Use Anti-Aliasing Full Sample:</b> "+str(bpy.context.scene.render.use_full_sample)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Anti-Aliasing Pixel Filter Type:</b> "+bpy.context.scene.render.pixel_filter_type+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Anti-Aliasing Filter Size:</b> "+str(bpy.context.scene.render.filter_size)+"</li>\n")
+        fhandle.write("</ul>\n")
+        fhandle.write("</div>\n")
+        fhandle.write("<div class=\"col-md-4 item\">\n")
+        fhandle.write("<br>\n")
+        fhandle.write("<ul class=\"list-group\">\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Motion Blur:</b> "+str(bpy.context.scene.render.use_motion_blur)+"</li>\n")
+        if bpy.context.scene.render.use_motion_blur:
+            fhandle.write("<li class=\"list-group-item\"><b>Motion Blur Samples:</b> "+str(bpy.context.scene.render.motion_blur_samples)+"</li>\n")
+            fhandle.write("<li class=\"list-group-item\"><b>Motion blur Shutter:</b> "+str(bpy.context.scene.render.motion_blur_shutter)+"</li>\n")
+        fhandle.write("</ul>\n")
+        fhandle.write("</div>\n")
+        fhandle.write("<div class=\"col-md-4 item\">\n")
+        fhandle.write("<br>\n")
+        fhandle.write("<ul class=\"list-group\">\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Textures:</b> "+str(bpy.context.scene.render.use_textures)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Shadows:</b> "+str(bpy.context.scene.render.use_shadows)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Subsurface Scattering:</b> "+str(bpy.context.scene.render.use_sss)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Environment Maps:</b> "+str(bpy.context.scene.render.use_envmaps)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use Raytracing:</b> "+str(bpy.context.scene.render.use_raytrace)+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Alpha:</b> "+bpy.context.scene.render.alpha_mode+"</li>\n")
+        fhandle.write("<li class=\"list-group-item\"><b>Use World Space Shading:</b> "+str(bpy.context.scene.render.use_world_space_shading)+"</li>\n")
+        fhandle.write("</ul>\n")
+        fhandle.write("</div>\n")
+    fhandle.write("<div class=\"col-md-4 item\">\n")
+    fhandle.write("<br>\n")
+    fhandle.write("<ul class=\"list-group\">\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Threads Mode:</b> "+bpy.context.scene.render.threads_mode+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Threads:</b> "+str(bpy.context.scene.render.threads)+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Tile Order:</b> "+bpy.context.scene.cycles.tile_order+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Tile X:</b> "+str(bpy.context.scene.render.tile_x)+"</li>\n")
+    fhandle.write("<li class=\"list-group-item\"><b>Tile Y:</b> "+str(bpy.context.scene.render.tile_y)+"</li>\n")
+    fhandle.write("</ul>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Create render table
+# -------------------------------------
+def html_render(rootpath, fhandle, filehtm, documen_only_render):
+    current_scene = bpy.context.scene
+
+    num = None
+    if current_scene.camera is not None:
+        camname = "<span class=\"float-md-right\"><small>Camera: <i>"+current_scene.camera.name+"</i></small></span>"
+    else:
+        camname = ""
+
+    fhandle.write("<div class=\"card card-block\" id=\"renderexample\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>Render Example: "+camname+"</h3>\n")
+    fhandle.write("<hr>\n")
+    # --------------------------
+    # Image (export and table)
+    # --------------------------
+    flagrender = False
+    
+    try:
+        oldslot = bpy.data.images['Render Result'].render_slots.active_index
+    except:
+        oldslot = 0
+
+    for num in range(0, 8):
+        
+        try:
+            bpy.data.images['Render Result'].render_slots.active_index = num
+            image = bpy.data.images['Render Result']
+            filesave = "render_slot_" + str(num) + "_" + os.path.splitext(filehtm)[0].lower() + ".png"
+            save_image(pathImages, filesave, image)
+            if os.path.exists(rootpath + "/" + pathImages + "/" + os.path.splitext(filesave)[0].lower() + ".png"):
+                z = ratio(current_scene.render.resolution_x,
+                          current_scene.render.resolution_y,
+                          960, 600)
+                fhandle.write("<a href=\""+pathImagesHtml+"/"+filesave+"\" target=\"_blank\">"+"<img src=\""+pathImagesHtml+"/"+filesave+"\" width=\"100%\" class=\"img-fluid\" alt=\""+filesave+"\"></a>\n")
+                flagrender = True
+        except:
+            print("slot " + str(num) + " empty.")
+    
+    try:
+        bpy.data.images['Render Result'].render_slots.active_index = oldslot
+    except:
+        flagrender = False
+
+    # No render (create OpenGL)
+    if flagrender is False:
+        
+        try:
+            print("Render default openGL in slot 8...")
+            bpy.data.images['Render Result'].render_slots.active_index = 7
+
+            if documen_only_render is True:
+                set_documen_only_render(True)
+
+            setcameraview()
+            bpy.ops.render.opengl()
+
+            if documen_only_render is True:
+                set_documen_only_render(False)
+
+            image = bpy.data.images['Render Result']
+            filesave = "render_slot_" + str(num) + "_" + os.path.splitext(filehtm)[0].lower() + ".png"
+            save_image(rootpath, filesave, image)
+
+            z = ratio(current_scene.render.resolution_x,
+                      current_scene.render.resolution_y,
+                      960, 600)
+            fhandle.write("<a href=\""+pathImagesHtml+"/"+filesave+"\" target=\"_blank\">"+"<img src=\""+pathImagesHtml+"/"+filesave+"\" width=\"100%\" class=\"img-fluid\" alt=\""+filesave+"\"></a>\n")
+
+            flagrender = True
+        except:
+            print("slot " + str(num) + " empty.")
+
+    
+    try:
+        bpy.data.images['Render Result'].render_slots.active_index = oldslot
+    except:
+        print("no render found")
+    # No render, add white noise
+    if flagrender is False:
+        z = ratio(960, 600, 960, 600)
+        fhandle.write("<a href=\""+pathStyleHtml+"/whitenoise.png\" target=\"_blank\">"+"<img src=\""+pathStyleHtml+"/whitenoise.png\" width=\"100%\" class=\"img-fluid\" alt=\"No Image Found\"></a>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Verify if exist in list
+# -------------------------------------
+def existinlist(mylist, element):
+    for l in mylist:
+        if l == element:
+            return True
+
+    return False
+
+
+# -------------------------------------
+# Create Frame Board table
+# -------------------------------------
+def html_storyboard(rootpath, fhandle, filehtm, documen_only_render, documen_include_story, documen_story_type, documen_threshold, documen_grease, documen_include_header):
+    current_scene = bpy.context.scene
+    f = current_scene.frame_start
+    t = current_scene.frame_end
+    print("Generating Frame Board with a documen_threshold of " + str(documen_threshold) + " keyframes/markers.")
+
+    if documen_story_type == "keyframes":
+        # -------------------
+        # Get keyframe list
+        # -------------------
+        klist = []
+        # --------------------------------------
+        # Using default keyframing
+        # --------------------------------------
+        if documen_grease is False:
+            ob = bpy.context.object
+            
+            try:
+                action_name = ob.animation_data.action.name
+            except:
+                action_name = ""
+
+            for a in bpy.data.actions:
+                if a.name == action_name:
+                    for curve in a.fcurves:
+                        keyframepoints = curve.keyframe_points
+                        for keyframe in keyframepoints:
+                            if existinlist(klist, keyframe.co[0]) is False:
+                                k = int(keyframe.co[0])
+                                if f <= k <= t:
+                                    klist.append(k)
+        # --------------------------------------
+        # Using documen_grease pencil keyframing
+        # --------------------------------------
+        if documen_grease is True:
+            
+            try:
+                gp = bpy.data.documen_grease_pencil[0]
+            except:
+                return  # nothing to do
+            # Get Layer
+            layer = gp.layers.get("Frame_board_html")
+            # Get Frames
+            if layer is not None:
+                for frame in layer.frames:
+                    k = frame.frame_number
+                    if f <= k <= t:
+                        klist.append(k)
+
+        klist.sort()
+        if len(klist) == 0:
+            return
+
+        if current_scene.camera is not None:
+            camname = "<span class=\"float-md-right\"><small>Camera: <i>"+current_scene.camera.name+"</i></small></span>"
+        else:
+            camname = ""
+
+        fhandle.write("<div class=\"card card-block\" id=\"frameboard\">\n")
+        fhandle.write("<div class=\"card-text\">\n")
+
+        fhandle.write("<h3>Frame Board: "+camname+"</h3>\n")
+        fhandle.write("<hr>\n")
+
+        # --------------------------
+        # Image (export and table)
+        # --------------------------
+        
+        try:
+            oldslot = bpy.data.images['Render Result'].render_slots.active_index
+        except:
+            oldslot = 1
+        if documen_only_render is True:
+            set_documen_only_render(True)
+
+        current_scene = bpy.context.scene
+        oldframe = bpy.context.scene.frame_current
+
+        x = 0
+        # apply documen_threshold to reduce number of keyframes
+        nextframe = klist[0]
+        i = 1
+        for e in klist:
+            
+            try:
+                if e >= nextframe or i == len(klist):
+                    nextframe = e + documen_threshold
+
+                    print("Frame Board keyframe: " + str(e))
+                    current_scene.frame_set(e)
+                    bpy.data.images['Render Result'].render_slots.active_index = 7
+                    setcameraview()
+                    # usar bpy.ops.render.render() para render real
+                    bpy.ops.render.opengl()
+                    image = bpy.data.images['Render Result']
+                    filesave = "frame_" + str(e) + "_" + os.path.splitext(filehtm)[0].lower() + ".png"
+                    save_image(rootpath, filesave, image)
+                    if os.path.exists(rootpath + "/" + os.path.splitext(filesave)[0].lower() + ".png"):
+                        # Select size of frame
+                        if int(documen_include_story) != 1:
+                            z = ratio(current_scene.render.resolution_x,
+                                      current_scene.render.resolution_y,
+                                      450, 275)
+                        else:
+                            z = ratio(current_scene.render.resolution_x,
+                                      current_scene.render.resolution_y,
+                                      600, 365)
+
+                        sec = (e / current_scene.render.fps)
+                        sectxt = "%0.03f" % sec
+                        fhandle.write("<div class=\"row\">\n")
+
+                        # 1 by row
+                        if int(documen_include_story) == 1:
+                            fhandle.write("<div class=\"col-md-12\">\n")
+                            fhandle.write("<img src=\""+pathImagesHtml+"/"+filesave+"\" width=\"100%\" class=\"figure-img img-fluid\" alt=\"Frame 1\"><p class=\"figure-caption\">Keyframe: <a href=\""+pathImagesHtml+"/"+filesave+"\" target=\"_blank\">"+str(e)+" ("+sectxt+" sec.)</a></p>\n")
+                            fhandle.write("</div>\n")
+                            x += 1
+                        # Notes Box
+                        if int(documen_include_story) == 3:
+                            fhandle.write("<div class=\"col-md-6\">\n")
+                            fhandle.write("<a href=\""+pathImagesHtml+"/"+filesave+"\" target=\"_blank\"><img src=\""+pathImagesHtml+"/"+filesave+"\" width=\"100%\" class=\"img-fluid\" alt=\""+filesave+"\"></a>\n")
+                            fhandle.write("</div>\n")
+                            fhandle.write("<div class=\"col-md-6\">\n")
+                            fhandle.write("<h4><small>Keyframe Info:</small></h4>\n")
+                            fhandle.write("<hr>\n")
+                            fhandle.write("<p><b>Frame Number:</b> "+str(e)+"</p>\n")
+                            fhandle.write("<p><b>Time:</b> "+sectxt+" sec.</p>\n")
+                            fhandle.write("<p><b>Notes:</b></p>\n")
+                            fhandle.write("</div>\n")
+                            x += 1
+
+                        fhandle.write("</div>\n")
+                        fhandle.write("<br>\n")
+
+                        x += 1
+                else:
+                    print("Omitted Frame Board keyframe: " + str(e))
+                # add 1 to keyframe for documen_threshold
+                i += 1
+            except:
+                print("Error in Frame Board. Did you render an image first?")
+
+        # back to old configuration
+        if 'Render Result' in bpy.data.images:
+            
+            try:
+                bpy.data.images['Render Result'].render_slots.active_index = oldslot
+            except:
+                bpy.data.images['Render Result'].render_slots.active_index = 1
+
+        current_scene.frame_set(oldframe)
+
+        if documen_only_render is True:
+            set_documen_only_render(False)
+
+        # -------------------
+        # Table foot
+        # -------------------
+        fhandle.write("</div>\n")
+        fhandle.write("</div>\n")
+
+    elif documen_story_type == "markers":
+        # -------------------
+        # Get marker list
+        # -------------------
+        mlist = []
+        for k, v in current_scene.timeline_markers.items():
+            frame = v.frame
+            name = v.name
+            mlist.append([frame, name])
+
+        mlist.sort()
+        if len(mlist) == 0:
+            return
+
+        if current_scene.camera is not None:
+            camname = "<span class=\"float-md-right\"><small>Camera: <i>"+current_scene.camera.name+"</i></small></span>"
+        else:
+            camname = ""
+
+        fhandle.write("<div class=\"card card-block\" id=\"frameboard\">\n")
+        fhandle.write("<div class=\"card-text\">\n")
+
+        fhandle.write("<h3>Frame Board: "+camname+"</h3>\n")
+        fhandle.write("<hr>\n")
+
+        # --------------------------
+        # Image (export and table)
+        # --------------------------
+        
+        try:
+            oldslot = bpy.data.images['Render Result'].render_slots.active_index
+        except:
+            oldslot = 1
+        if documen_only_render is True:
+            set_documen_only_render(True)
+
+        current_scene = bpy.context.scene
+        oldframe = bpy.context.scene.frame_current
+
+        x = 0
+        # apply documen_threshold to reduce number of keyframes
+        nextframe = mlist[0][0]
+        i = 1
+        for e in mlist:
+            
+            try:
+                if e[0] >= nextframe or i == len(mlist):
+                    nextframe = e[0] + documen_threshold
+
+                    print("Frame Board keyframe: " + str(e[0]))
+                    current_scene.frame_set(e[0])
+                    bpy.data.images['Render Result'].render_slots.active_index = 7
+                    setcameraview()
+                    # usar bpy.ops.render.render() para render real
+                    bpy.ops.render.opengl()
+                    image = bpy.data.images['Render Result']
+                    filesave = "frame_" + str(e[0]) + "_" + os.path.splitext(filehtm)[0].lower() + ".png"
+                    save_image(rootpath, filesave, image)
+                    if os.path.exists(rootpath + "/" + os.path.splitext(filesave)[0].lower() + ".png"):
+                        # Select size of frame
+                        if int(documen_include_story) != 1:
+                            z = ratio(current_scene.render.resolution_x,
+                                      current_scene.render.resolution_y,
+                                      450, 275)
+                        else:
+                            z = ratio(current_scene.render.resolution_x,
+                                      current_scene.render.resolution_y,
+                                      600, 365)
+
+                        sec = (e[0] / current_scene.render.fps)
+                        sectxt = "%0.03f" % sec
+                        fhandle.write("<div class=\"row\">\n")
+
+                        # 1 by row
+                        if int(documen_include_story) == 1:
+                            fhandle.write("<div class=\"col-md-12\">\n")
+                            fhandle.write("<img src=\""+pathImagesHtml+"/"+filesave+"\" width=\"100%\" class=\"figure-img img-fluid\" alt=\"Frame 1\"><p class=\"figure-caption\">Marker: <a href=\""+pathImagesHtml+"/"+filesave+"\" target=\"_blank\">"+str(e[0])+" ("+sectxt+" sec.)</a></p>\n")
+                            fhandle.write("</div>\n")
+                            x += 1
+                        # Notes Box
+                        if int(documen_include_story) == 3:
+                            fhandle.write("<div class=\"col-md-6\">\n")
+                            fhandle.write("<a href=\""+pathImagesHtml+"/"+filesave+"\" target=\"_blank\"><img src=\""+pathImagesHtml+"/"+filesave+"\" width=\"100%\" class=\"img-fluid\" alt=\""+filesave+"\"></a>\n")
+                            fhandle.write("</div>\n")
+                            fhandle.write("<div class=\"col-md-6\">\n")
+                            fhandle.write("<h4><small>Marker Info:</small></h4>\n")
+                            fhandle.write("<hr>\n")
+                            fhandle.write("<p><b>Frame Number:</b> "+str(e[0])+"</p>\n")
+                            fhandle.write("<p><b>Time:</b> "+sectxt+" sec.</p>\n")
+                            fhandle.write("<p><b>Notes:</b></p>\n")
+                            fhandle.write("<p>"+e[1]+"</p>\n")
+                            fhandle.write("</div>\n")
+                            x += 1
+
+                        fhandle.write("</div>\n")
+                        fhandle.write("<br>\n")
+
+                        x += 1
+                else:
+                    print("Omitted Frame Board keyframe: " + str(e[0]))
+                # add 1 to keyframe for documen_threshold
+                i += 1
+            except Exception as exception:
+                print("Error in Frame Board. Did you render an image first?")
+                print("Nerdy error: "+str(exception)+"\n")
+
+        # back to old configuration
+        if 'Render Result' in bpy.data.images:
+            try:
+                bpy.data.images['Render Result'].render_slots.active_index = oldslot
+            except:
+                bpy.data.images['Render Result'].render_slots.active_index = 1
+
+        current_scene.frame_set(oldframe)
+
+        if documen_only_render is True:
+            set_documen_only_render(False)
+
+        # -------------------
+        # Table foot
+        # -------------------
+        fhandle.write("</div>\n")
+        fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Create images table
+# -------------------------------------
+def html_images(fhandle):
+    fhandle.write("<div class=\"card card-block\" id=\"imagesused\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>Images Used:</h3>\n")
+    fhandle.write("<hr>\n")
+    fhandle.write("<div class=\"table-responsive\">\n")
+    fhandle.write("<table class=\"table table-striped\">\n")
+    fhandle.write("<thead class=\"thead-inverse\">\n")
+    fhandle.write("<tr>\n")
+    fhandle.write("<th>Filename</th>\n")
+    fhandle.write("<th>Format</th>\n")
+    fhandle.write("<th>Image Size</th>\n")
+    fhandle.write("<th>Path</th>\n")
+    fhandle.write("</tr>\n")
+    fhandle.write("</thead>\n")
+    fhandle.write("<tbody>\n")
+    # -------------------
+    # Loop
+    # -------------------
+    flagimg = False
+    imgs = bpy.data.images
+    for myimage in imgs:
+        if myimage.name != "Render Result" and myimage.name != "Viewer Node":
+            (filepath, filename) = os.path.split("//.." + myimage.filepath)
+            fhandle.write("<tr>\n")
+            z = ratio(myimage.size[0], myimage.size[1])
+            myfilesave = os.path.splitext(filename)[0] + ".png"
+            fhandle.write("<th scope=\"row\">"+myimage.name+"</th>\n")
+            fhandle.write("<td>"+myimage.file_format+"</td>\n")
+            fhandle.write("<td>"+str(myimage.size[0])+"x"+str(myimage.size[1])+"</td>\n")
+            fhandle.write("<td>"+myimage.filepath+"</td>\n")
+            fhandle.write("</tr>\n")
+            flagimg = True
+
+    # NO images (message)
+    if not flagimg:
+        fhandle.write("<tr>\n")
+        fhandle.write("<td colspan=\"4\">No images were found in the .blend file!</td>")
+        fhandle.write("</tr>\n")
+
+    # -------------------
+    # Table foot
+    # -------------------
+    fhandle.write("</tbody>\n")
+    fhandle.write("</table>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Create links table
+# -------------------------------------
+def html_links(fhandle):
+    fhandle.write("<div class=\"card card-block\" id=\"linkedfiles\">\n")
+    fhandle.write("<div class=\"card-text\">\n")
+    fhandle.write("<h3>Linked Files:</h3>\n")
+    fhandle.write("<hr>\n")
+    fhandle.write("<div class=\"table-responsive\">\n")
+    fhandle.write("<table class=\"table table-striped\">\n")
+    fhandle.write("<thead class=\"thead-inverse\">\n")
+    fhandle.write("<tr>\n")
+    fhandle.write("<th>Path</th>\n")
+    fhandle.write("</tr>\n")
+    fhandle.write("</thead>\n")
+    fhandle.write("<tbody>\n")
+
+    # -------------------
+    # Loop
+    # -------------------
+    libs = bpy.data.libraries
+    for lib in libs:
+        fhandle.write("<tr>\n")
+        fhandle.write("<th scope=\"row\">" + lib.filepath + "</th>\n")
+        fhandle.write("</tr>\n")
+
+    # NO Links (message)
+    if len(libs) == 0:
+        fhandle.write("<tr>\n")
+        fhandle.write("<td>No linked files were found in the .blend file!</td>")
+        fhandle.write("</tr>\n")
+
+    # -------------------
+    # Table foot
+    # -------------------
+    fhandle.write("</tbody>\n")
+    fhandle.write("</table>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+    fhandle.write("</div>\n")
+
+
+# -------------------------------------
+# Save image to file
+# -------------------------------------
+def save_image(rootpath, filename, myimage):
+    
+    try:
+        filepath = rootpath + "/" + os.path.splitext(filename)[0] + ".png"
+
+        # Save old info
+        settings = bpy.context.scene.render.image_settings
+        myformat = settings.file_format
+        mode = settings.color_mode
+        depth = settings.color_depth
+
+        # Apply new info and save
+        settings.file_format = 'PNG'
+        settings.color_mode = find_color_mode(myimage)
+        settings.color_depth = '8'
+        myimage.save_render(filepath)
+
+        # Restore old info
+        settings.file_format = myformat
+        settings.color_mode = mode
+        settings.color_depth = depth
+    except:
+        return
+        # print("Unable to save")
+
+
+# -------------------------------------
+# Export images to folder
+# -------------------------------------
+def export_images(rootpath):
+    print("\nExporting images...")
+    imgs = bpy.data.images
+    for image in imgs:
+        name = image.name
+        if name != "Render Result" and name != "Viewer Node":
+            (filepath, filename) = os.path.split("//.." + image.filepath)
+            w = image.size[0]
+            h = image.size[1]
+
+            print("Image:" + name)
+            print(' width: %d' % w)
+            print(' height: %d' % h)
+            save_image(rootpath, filename, image)
