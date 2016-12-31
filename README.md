@@ -1,4 +1,4 @@
-![Pep8Online logo](https://raw.githubusercontent.com/johnroper100/pep8online/master/static/img/logo.png)
+<img src="https://raw.githubusercontent.com/johnroper100/pep8online/master/static/img/logo.png" width="50%">
 
 Pep8Online
 ==========
