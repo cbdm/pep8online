@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 #-*- encoding: utf8 -*-
-from flask import Flask, render_template, request, abort, send_file
+from flask import Flask, render_template, request, abort, make_response
 from checktools import check_text, is_py_extension, pep8parser, template_results
 from datetime import datetime
 from generate import gen_text_file, gen_result_text
 from tools import generate_short_name
-
+from werkzeug import FileWrapper
 
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -98,10 +98,12 @@ def save_code():
         code_text = request.form["orig_code"]
         code_file = gen_text_file(code_text)
         attachment_filename = ''.join(('code_', get_datetime(), '.py'))
-        return send_file(code_file,
-                         mimetype="application/x-python",
-                         as_attachment=True,
-                         attachment_filename=attachment_filename)
+
+        response = make_response(code_file.getvalue().decode('utf8'))
+        response.headers.set('Content-Type', 'application/x-python')
+        response.headers.set('Content-Disposition', 'attachment', filename=attachment_filename)
+        
+        return response
     else:
         return ''
 
@@ -113,13 +115,17 @@ def save_result():
         code_result = request.form["orig_results"]
         res_file = gen_text_file(gen_result_text(code_result, code_text))
         attachment_filename = ''.join(('result_', get_datetime(), '.txt'))
-        return send_file(res_file,
-                         mimetype="text/plain",
-                         as_attachment=True,
-                         attachment_filename=attachment_filename)
+
+        response = make_response(res_file.getvalue().decode('utf8'))
+        response.headers.set('Content-Type', 'text/plain')
+        response.headers.set('Content-Disposition', 'attachment', filename=attachment_filename)
+        
+        return response
     else:
         return ''
 
+'''
+Commenting this out so students can't share code with each other.
 
 #TODO
 #It will be remove later after 30-60 days
@@ -190,7 +196,7 @@ def share_result(key=None):
         return str(key)
     else:
         return ''
-
+'''
 
 #For development
 if __name__ == '__main__':
