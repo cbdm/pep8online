@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #-*- encoding: utf8 -*-
 from flask import Flask, render_template, request, abort, make_response
-from checktools import check_text, is_py_extension, pep8parser, template_results
+from checktools import check_text, is_py_extension, pycodestyle_parser, template_results
 from datetime import datetime
 from generate import gen_text_file, gen_result_text
 from tools import generate_short_name
@@ -89,6 +89,7 @@ def check_result():
                 app.config['TEMP_PATH'],
                 logger=app.logger if app.config['LOG'] else None
             )
+    print(context)
     return render_template("check_result.html", **context)
 
 

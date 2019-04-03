@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}ICS 31 Online Style Checker - Results{% endblock %}
+{% block title %}ICS 31 Style Checker - Results{% endblock %}
 {% block content %}
         {% if error %}
             <h3 style="margin-top: 15px; margin-bottom: 0px;">{{ error }}</h3>
@@ -8,7 +8,7 @@
             {% if result %}
                 <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">Check Your Results:</h3>
             {% else %}
-                <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">All Right!</h3>
+                <h3 style="float: left; margin-top: 15px; margin-bottom: 0px;">Looks Good! </h3><br><br><h5> (But also <a class="nav-link" href="/about">click here</a>.)</h5>
             {% endif %}
             <ul class="nav nav-pills" style="float: right; margin-top: 12px; margin-bottom: 5px;">
                 <li class="nav-item dropdown">
@@ -57,6 +57,8 @@
                                     <span class="tag tag-warning">W{{ res.code }}</span>
                                 {% elif res.type == "E" %}
                                     <span class="tag tag-danger">E{{ res.code }}</span>
+                                {% elif res.type == "D" %}
+                                    <span class="tag tag-success">D{{ res.code }}</span>
                                 {% endif %}
                             </td>
                             <td>
