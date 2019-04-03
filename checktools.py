@@ -1,6 +1,6 @@
 #-*- encoding: utf8 -*-
 import pep8
-import StringIO
+import io
 import sys
 import os
 import tempfile
@@ -28,12 +28,13 @@ def pep8parser(strings, temp_dict_f=template_pep8):
     Convert strings from pep8 results to list of dictionaries
     """
     result_list = []
-    for s in strings:
+
+    for s in strings.split('\n'):
+        print('s is -> {}'.format(s))
         temp = re.findall(r"(.+?):(.+?):(.+?):(.*)", s)
         if temp and len(temp[0]) >= 4:
             result_list.append(temp_dict_f(temp[0]))
     return result_list
-
 
 def check_text(text, temp_dir, logger=None):
     """
@@ -42,25 +43,27 @@ def check_text(text, temp_dir, logger=None):
     #prepare code
     code_file, code_filename = tempfile.mkstemp(dir=temp_dir)
     with open(code_filename, 'w') as code_file:
-        code_file.write(text.encode('utf8'))
-        #initialize pep8 checker
+        code_file.write(text)
+    #initialize pep8 checker
     pep8style = pep8.StyleGuide(parse_argv=False, config_file=False)
     options = pep8style.options
     #redirect print and get result
-    temp_outfile = StringIO.StringIO()
+    temp_outfile = io.StringIO()
     sys.stdout = temp_outfile
     checker = pep8.Checker(code_filename, options=options)
     checker.check_all()
     sys.stdout = sys.__stdout__
-    result = temp_outfile.buflist[:]
+    result = temp_outfile.getvalue()
     #clear all
     temp_outfile.close()
     code_file.close()
     os.remove(code_filename)
     fullResultList = pep8parser(result)
+    print(fullResultList)
     fullResultList.sort(key=lambda x: (int(x['line']), int(x["place"])))
     if logger:
         logger.debug(result)
+
     return fullResultList
 
 

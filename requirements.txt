@@ -1,3 +1,8 @@
-Flask
-pep8
-pymongo
+Click==7.0
+Flask==1.0.2
+itsdangerous==1.1.0
+Jinja2==2.10
+MarkupSafe==1.1.1
+pep8==1.7.1
+pymongo==3.7.2
+Werkzeug==0.15.2

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #-*- encoding: utf8 -*-
 from flask import Flask, render_template, request, abort, send_file
 from checktools import check_text, is_py_extension, pep8parser, template_results
@@ -73,7 +74,7 @@ def check_result():
             if not is_py_extension(code_file.filename):
                 context['error'] = 'Please upload python file'
                 return render_template("check_result.html", **context)
-            context['code_text'] = code_file.read()
+            context['code_text'] = code_file.read().decode('utf8')
         else:
             try:
                 context['code_text'] = request.form["code"]
@@ -193,8 +194,6 @@ def share_result(key=None):
 
 #For development
 if __name__ == '__main__':
-    try:
-        app.config.from_object('development_settings')
-    except ImportError:
-        pass
+    app.config['TEMP_PATH'] = 'tmp'
+    app.config['LOG_FILE'] = 'logs'
     app.run(debug=True)

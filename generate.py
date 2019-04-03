@@ -1,15 +1,16 @@
 #-*- encoding: utf8 -*-
-from StringIO import StringIO
+from io import BytesIO
 
 
 def gen_text_file(text):
-    text_file = StringIO()
+    text_file = BytesIO()
     text_file.write(text.encode('utf8'))
     text_file.seek(0)
     return text_file
 
 
 def gen_result_text(result, code):
+    print(result)
     """Generate text for file from checking result and code"""
     text_list = ["Check results",
                  "=============",
@@ -19,6 +20,7 @@ def gen_result_text(result, code):
                       "Code",
                       "============="])
     text_list.append(code)
+    print(text_list)
     return '\n'.join(text_list)
 
 if __name__ == '__main__':

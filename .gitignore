@@ -7,3 +7,5 @@ fabfile.py
 logs/
 temp/
 .DS_STORE
+pep8_update
+tmp
