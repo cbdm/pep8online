@@ -1,9 +1,12 @@
 #-*- encoding: utf8 -*-
 import pycodestyle
 from pydocstyle import check
+from zipfile import ZipFile
+from flask import flash
 import io
 import sys
 import os
+from os.path import join, exists
 import tempfile
 import re
 
@@ -43,22 +46,31 @@ def pydocstyle_parser(errors, filename, temp_dict_f=template_pycode):
 
     result_list = []
     
-    for e in errors:
-        line, msg = str(e).split('\n')
-        line, msg = line.strip(), msg.strip()
-        
-        # finds the line number where the function is defined
-        colon = line.index(':')
-        line = line[colon+1:].split()[0]
+    try:
+        for e in errors:
+            line, msg = str(e).split('\n')
+            line, msg = line.strip(), msg.strip()
+            
+            # finds the line number where the function is defined
+            colon = line.index(':')
+            line = line[colon+1:].split()[0]
 
-        # finds the error number and text       
-        code, text = msg.split(': ')
+            # finds the error number and text       
+            code, text = msg.split(': ')
+            result_list.append({
+                'type': code[0],
+                'code': code[1:],
+                'line': line,
+                'place': 0,
+                'text': text
+            })
+    except:
         result_list.append({
-            'type': code[0],
-            'code': code[1:],
-            'line': line,
-            'place': 0,
-            'text': text
+                'type': 'D',
+                'code': '000',
+                'line': 0,
+                'place': 0,
+                'text': 'Could not parse your code for docstrings. Fix other mistakes and try again.'
         })
 
     return result_list
@@ -83,7 +95,7 @@ def check_text(text, temp_dir, logger=None):
     result = temp_outfile.getvalue()
     #checks for pydocstyle
     # checking only for selected errors.
-    # List with all possible ones found at http://www.pydocstyle.org/en/stable/error_codes.html
+    # List with all possible errors found at http://www.pydocstyle.org/en/stable/error_codes.html
     docstrings_selected_errors = ['D103', 'D200', 'D201', 'D205', 'D209',
             'D210', 'D213', 'D300', 'D301', 'D302', 'D400', 'D402', 'D403', 'D404']
     doc_errors = check([code_filename], select=docstrings_selected_errors)
@@ -101,6 +113,69 @@ def check_text(text, temp_dir, logger=None):
 
     return fullResultList
 
+def check_submissions(submissions, filename, temp_dir):
+    """
+    checks all zybooks submissions in a zipfile
+    """
+    def _parse_student(current_sub, separator='_', domain='uci.edu'):
+        data = current_sub.split(separator)
+        for d in data:
+            if d.endswith(domain):
+                return d[:-len(domain)].lower()
+
+    results = {}
+
+    # creates a new temporary directory to extract the submissions
+    temp_dir = tempfile.TemporaryDirectory(dir=temp_dir)
+    # updates the filename to look in the temporary dir
+    filename = join(temp_dir.name, filename)
+    if not is_py_extension(filename):
+        filename += '.py'
+
+    # creates a temporary file that can be extracted
+    zip_file, zip_filename = tempfile.mkstemp(dir=temp_dir.name)
+    with open(zip_filename, 'wb') as zip_file:
+        zip_file.write(submissions)
+
+    # extracts all students' submissions
+    zip_ref = ZipFile(zip_filename, 'r')
+    zip_ref.extractall(temp_dir.name)
+    zip_ref.close()
+
+    # removes the temp file
+    zip_file.close()
+    os.remove(zip_filename)
+
+    valid_filename = True
+
+    # loops through all submissions
+    for submission in os.listdir(temp_dir.name):
+        student = _parse_student(submission)
+
+        if student == None: continue
+    
+        # unzips the code of current student
+        zip_ref = ZipFile(join(temp_dir.name,submission), 'r')
+        zip_ref.extractall(temp_dir.name)
+        zip_ref.close()
+
+        try:
+            with open(filename, 'r') as code_file:
+                res = check_text(code_file.read(),temp_dir.name)
+                results[student] = res
+        except:
+            if valid_filename:
+                valid_filename = False
+                flash('Double check the python filename.', 'warning')
+
+        # removes student's code that we just analyzed
+        if exists(filename):
+            os.remove(filename)
+
+    #clears the temporary directory created
+    temp_dir.cleanup()
+
+    return results
 
 def is_py_extension(filename):
     return ('.' in filename) and (filename.split('.')[-1] == 'py')

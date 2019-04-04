@@ -65,7 +65,9 @@
                                 {{ res.line }}
                             </td>
                             <td>
+                                {% if res.type != "D" %}
                                 {{ res.place }}
+                                {% endif %}
                             </td>
                             <td>
                                 {{ res.text }}

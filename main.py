@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 #-*- encoding: utf8 -*-
 from flask import Flask, render_template, request, abort, make_response
-from checktools import check_text, is_py_extension, pycodestyle_parser, template_results
+from checktools import check_text, is_py_extension, pycodestyle_parser, template_results, check_submissions
 from datetime import datetime
-from generate import gen_text_file, gen_result_text
+from generate import gen_text_file, gen_result_text, gen_report
 from tools import generate_short_name
-from werkzeug import FileWrapper
 
+'''
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+'''
 
 app = Flask(__name__)
+app.secret_key = 'PLACEHOLDER___change_THIS_before_RELEASE'
+
 try:
     app.config.from_object('production_settings')
 except ImportError:
@@ -52,6 +55,38 @@ def upload_page():
     """
     return render_template("upload_page.html")
 
+@app.route("/upload-ta", methods=['POST', 'GET'])
+@app.route("/instructor-upload", methods=['POST', 'GET'])
+def instructor_upload_page():
+    """
+    Page to upload students submissions
+
+    Instructor can upload a zip file containing submissions downloaded from
+    zybooks and get a csv report with the mistakes each student made.
+    """
+    return render_template("instructor_upload_page.html")
+
+@app.route("/get-report", methods=['POST', ])
+def get_report():
+    if request.method == "POST":
+        if str(request.referrer).replace(request.host_url, '') in ['instructor-upload', 'upload-ta']:
+            zip_file = request.files['zip_file']
+            submission_name = request.form['submission_name']
+            if submission_name == '':
+                submission_name = 'main.py'
+            results = check_submissions(zip_file.read(),
+                                submission_name,
+                                app.config['TEMP_PATH'])
+            report = gen_report(results)
+            attachment_filename = ''.join(('report_', get_datetime(), '.csv'))
+
+            response = make_response(report.getvalue().decode('utf8'))
+            response.headers.set('Content-Type', 'text/csv')
+            response.headers.set('Content-Disposition', 'attachment', filename=attachment_filename)
+            
+            return response
+    else:
+        return ''
 
 @app.route("/checkresult", methods=['POST', ])
 def check_result():
@@ -77,6 +112,7 @@ def check_result():
             context['code_text'] = code_file.read().decode('utf8')
         else:
             try:
+                print(request.form)
                 context['code_text'] = request.form["code"]
             except KeyError:
                 abort(404)
@@ -89,7 +125,6 @@ def check_result():
                 app.config['TEMP_PATH'],
                 logger=app.logger if app.config['LOG'] else None
             )
-    print(context)
     return render_template("check_result.html", **context)
 
 

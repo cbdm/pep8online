@@ -1,5 +1,3 @@
-<img src="https://raw.githubusercontent.com/johnroper100/pep8online/master/static/img/logo.png" width="50%">
-
 ICS 31 Style Checker
 ==========
 

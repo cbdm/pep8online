@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}ICS 31 Style Checker - INSTRUCTOR UPLOAD{% endblock %}
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for category, message in messages %}
+      <li class="{{ category }}">{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+    <form class="form-inline" name="instructor_upload_file" action="#" method="POST"
+          enctype=multipart/form-data class="form-horizontal no-bottom-margin"
+          onsubmit="return submitFileForm();">
+        <h3 style="margin-top: 15px; margin-bottom: 25px;">Upload ZyBooks Zip File:</h3>
+        
+        <div class="form-group">
+            <input type="text" class="form-control" id="filename">
+            <button type="button" class="btn btn-primary" onclick="fileUploadClick()">Select File</button>
+        </div>
+        <br><br>
+        <div class="form-group">
+            <h5> Filename of individual submissions (set to main.py if blank)</h5>
+            <input type="text" class="form-control" id="submission_name" name="submission_name">
+        </div>
+        <br><br>
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">Check Submissions</button>
+            <span id="error" class="control-label"></span>
+        </div>
+        <input type="file" name="zip_file" class="hidden_upload" id="zip_file"
+               onchange="fillFilename()"
+               style="visibility: hidden; height: 1px; margin: 0px;">
+        <script>
+            function submitFileForm() {
+                var MAX_SIZE = 10 * 1024 * 1024;
+                var errorField = document.getElementById('error');
+                var fileUpload = document.getElementById('zip_file');
+                if (!fileUpload.files.length) {
+                    errorField.innerHTML = "Forget file";
+                    return false;
+                }
+                if (window.FileReader) {
+                    var file = fileUpload.files[0];
+                    if (file.name.split('.').pop().toLowerCase() != 'zip') {
+                        errorField.innerHTML = "You should submit the submissions zip file from zybooks.";
+                        return false;
+                    }
+                    if (file.size > MAX_SIZE) {
+                        errorField.innerHTML = "Max file size - 10Mb";
+                        return false;
+                    }
+                    else if (!file.size) {
+                        errorField.innerHTML = "Empty file";
+                        return false;
+                    }
+                }
+                var form = document.forms['instructor_upload_file'];
+                form.action = '/get-report';
+                form.submit()
+                return true;
+            }
+            function fileUploadClick() {
+                var fileUpload = document.getElementById('zip_file');
+                fileUpload.click();
+            }
+            function fillFilename() {
+                var inputFilename = document.getElementById('filename');
+                var fileUpload = document.getElementById('zip_file');
+                var filePath = fileUpload.value;
+                if (filePath.match(/fakepath/)) {
+                    filePath = filePath.replace(/C:\\fakepath\\/i, '');
+                }
+                inputFilename.value = filePath;
+            }
+        </script>
+    </form>
+
+{% endblock %}
