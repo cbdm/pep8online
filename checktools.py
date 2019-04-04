@@ -172,9 +172,6 @@ def check_submissions(submissions, filename, temp_dir):
         if exists(filename):
             os.remove(filename)
 
-    #clears the temporary directory created
-    temp_dir.cleanup()
-
     return results
 
 def is_py_extension(filename):
