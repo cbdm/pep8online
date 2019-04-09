@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #-*- encoding: utf8 -*-
 from flask import Flask, render_template, request, abort, make_response
-from checktools import check_text, is_py_extension, pycodestyle_parser, template_results, check_submissions
+from checktools import check_text, is_py_extension, check_submissions
 from datetime import datetime
 from generate import gen_text_file, gen_result_text, gen_report
 from tools import generate_short_name

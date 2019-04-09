@@ -47,18 +47,21 @@
                             <th>
                                 Text
                             </th>
+                            <th>
+                                Linter
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for res in result %}
                         <tr class="tr-result">
                             <td>
-                                {% if res.type == "W" %}
-                                    <span class="tag tag-warning">W{{ res.code }}</span>
-                                {% elif res.type == "E" %}
+                                {% if res.type == "E" %}
                                     <span class="tag tag-danger">E{{ res.code }}</span>
                                 {% elif res.type == "D" %}
                                     <span class="tag tag-success">D{{ res.code }}</span>
+                                {% else %}
+                                    <span class="tag tag-warning">{{ res.type }}{{ res.code }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -71,6 +74,9 @@
                             </td>
                             <td>
                                 {{ res.text }}
+                            </td>
+                            <td>
+                                {{ res.linter }}
                             </td>
                         </tr>
                     {% endfor %}
