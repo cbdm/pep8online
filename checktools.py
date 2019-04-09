@@ -8,13 +8,57 @@ from os.path import join, exists
 import tempfile
 import re
 from pylama.main import check_path, parse_options
+from py_compile import compile
 
-def pylama_parser(error_list):
+def repeated_error(error_list, new_error):
+    """
+    checks if the detected error is not repeated
+
+    i.e., another linter hasn't detected the same error at the same place
+    if it is repeated, update the list of linters that encountered the error
+    """
+    # starts at the last index as the new error is going to be added after that
+    i = len(error_list)-1
+    
+    while i >= 0:
+        # checks if the error was caught on the same line
+        if error_list[i]['line'] == new_error['line']:
+            
+            # checks if it's the same error
+            if error_list[i]['type']+error_list[i]['code'] == new_error['type']+new_error['code']:
+                
+                # if it is, update the list of linters that encountered it
+                # and then returns True to indicate that's a repeated one
+                error_list[i]['linter'] += ', ' + new_error['linter']
+                return True
+
+            # if it's not the same error, go back one index to check the previous error
+            i -= 1
+        
+        # if we are above the new error's line, then it's not a repeated error
+        else:
+            break
+    
+    # if reached the end, we haven't encountered a repeated error
+    return False
+
+def pylama_parser(error_list, compiled):
     """
     parses the error list returned by pylama
     """
     result_list = []
+    
+    # custom error in case the student's file could not be parsed
+    if not compiled:
+        result_list.append({
+            'type': 'SYN',
+            'code': '000',
+            'line': 0,
+            'place': 0,
+            'text': 'Cannot parse your file! Fix any syntax errors and try again.'
+        })
 
+    # parses the information of each detected error
     for error in error_list:
         _text = error.get('text').split()
         _type = _text[0][0]
@@ -23,52 +67,57 @@ def pylama_parser(error_list):
         _text = ' '.join(_text[1:-1])
         
         _error = {
-                'type': _type,
-                'code': _code,
-                'line': error.get('lnum'),
-                'place': error.get('col'),
-                'text': _text,
-                'linter': _linter
+            'type': _type,
+            'code': _code,
+            'line': error.get('lnum'),
+            'place': error.get('col'),
+            'text': _text,
+            'linter': _linter
         }
 
-        # checks if it's a new error
-        # (i.e., another linter hasn't detected the same error at the same place)
-        if  result_list == [] or \
-            result_list[-1]['line'] != _error['line'] or \
-            result_list[-1]['place'] != _error['place'] or \
-            result_list[-1]['type']+result_list[-1]['code'] != _error['type']+_error['code']:
-           
+        # adds the current error if it wasn't detected before by another linter
+        if not repeated_error(result_list, _error):
             result_list.append(_error)
 
     return result_list
 
 def check_text(text, temp_root, logger=None):
     """
-    check text for pycodestyle and pydocstyle requirements
+    check code for style requirements using PyLama
     """
-    # creates a new temporary directory to extract the submissions
+    # creates a new temporary directory to extract the submission
     temp_dir = tempfile.TemporaryDirectory(dir=temp_root)
-    #prepare code
+    
+    # writes code to a temporary file
     code_file, code_filename = tempfile.mkstemp(suffix='.py', dir=temp_dir.name)
 
     with open(code_filename, 'w') as code_file:
         code_file.write(text)
     
+    # first checks if the file can be compiled
+    # i.e., there are no syntax errors in the file
+    compiled = True
+    try:
+        compile(code_filename, doraise=True)
+    except:
+        compiled = False
+
+    # configures and runs pylama to analyze the temp file
     pylama_options = {
-    'linters': ['pep257', 'pydocstyle', 'pycodestyle', 'pyflakes', 'pylint']
+        'linters': ['pep257', 'pydocstyle', 'pycodestyle', 'pyflakes', 'pylint']
     }
     pylama_path = temp_dir.name
     options = parse_options([pylama_path], **pylama_options)
-    
     errors = check_path(options, rootdir='.')
-    results = pylama_parser(errors)
 
-    results.sort(key=lambda x: (int(x['line']), int(x["place"])))
+    # parses and sorts the errors received
+    results = pylama_parser(errors, compiled)
+    results.sort(key=lambda x: (int(x['line']), int(x['place'])))
 
     if logger:
         logger.debug(results)
 
-    #clear all
+    #clear all temp files
     code_file.close()
     os.remove(code_filename)
 
