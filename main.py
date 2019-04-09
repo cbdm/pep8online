@@ -112,7 +112,6 @@ def check_result():
             context['code_text'] = code_file.read().decode('utf8')
         else:
             try:
-                print(request.form)
                 context['code_text'] = request.form["code"]
             except KeyError:
                 abort(404)
