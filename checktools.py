@@ -10,6 +10,52 @@ import re
 from pylama.main import check_path, parse_options
 from py_compile import compile
 
+ignored_errors = {
+    'E501': 'line too long (>79 characters)',
+    'C0301': 'line too long (>100 characters)',
+    'D212': 'mutually exclusive to D213 (multiline docstrings)',
+    'C0103': "naming conventions (I'm just turning it off because lab instructions go against them very often)",
+    'C0303' : 'spaces on empty line',
+    'W293' : 'spaces on empty line',
+    'R1705' : 'if return else return (unnecessary else statement)',
+    'R0916' : 'too many boolean expressions, >5 (some labs have 6+ checks)',
+    'R1703' : 'allow if something return true, instead of just return something'
+}
+
+class DisplayError(object):
+    def __init__(self, error):
+        _text = error.get('text').split()
+        self.type = _text[0][0]
+        self.code = _text[0][1:]
+        self.linter = _text[-1][1:-1]
+        self.text = ' '.join(_text[1:-1])
+        self.line = error.get('lnum')
+        self.place =  error.get('col')
+
+    def merge(self, other):
+        if isinstance(other, DisplayError):
+            self.linter += ', ' + other.linter
+
+    def __eq__(self, other):
+        if not isinstance(other, DisplayError):
+            return False
+        
+        return self.type == other.type and self.code == other.code and self.line == other.line and self.place == self.place
+    
+    def __gt__(self, other):
+        if not isinstance(other, DisplayError):
+            return False
+        
+        if self.line > other.line:
+            return True
+        elif self.line == other.line and self.place > other.place:
+            return True
+        
+        return False
+
+    def __hash__(self):
+        return '{}/{}/{}'.format(self.type+self.code, self.line, self.place)
+
 def repeated_error(error_list, new_error):
     """
     checks if the detected error is not repeated
@@ -86,40 +132,39 @@ def check_text(text, temp_root, logger=None):
     check code for style requirements using PyLama
     """
     # creates a new temporary directory to extract the submission
-    temp_dir = tempfile.TemporaryDirectory(dir=temp_root)
-    
-    # writes code to a temporary file
-    code_file, code_filename = tempfile.mkstemp(suffix='.py', dir=temp_dir.name)
+    with tempfile.TemporaryDirectory(dir=temp_root) as temp_dir:
+        
+        # creates a temporary file to write the code to
+        code_file, code_filename = tempfile.mkstemp(suffix='.py', dir=temp_dir)
 
-    with open(code_filename, 'w') as code_file:
-        code_file.write(text)
-    
-    # first checks if the file can be compiled
-    # i.e., there are no syntax errors in the file
-    compiled = True
-    try:
-        compile(code_filename, doraise=True)
-    except:
-        compiled = False
+        # writes the code to the file
+        with open(code_filename, 'w') as code_file:
+            code_file.write(text)
+        
+        # first checks if the file can be compiled
+        # i.e., there are no syntax errors in the file
+        compiled = True
+        try:
+            compile(code_filename, doraise=True)
+        except:
+            compiled = False
 
-    # configures and runs pylama to analyze the temp file
-    pylama_options = {
-        'linters': ['pep257', 'pydocstyle', 'pycodestyle', 'pyflakes', 'pylint']
-    }
-    pylama_path = temp_dir.name
-    options = parse_options([pylama_path], **pylama_options)
-    errors = check_path(options, rootdir='.')
+        # configures and runs pylama to analyze the temp file
+        global ignored_errors
+        pylama_options = {
+            'linters': ['pep257', 'pydocstyle', 'pycodestyle', 'pyflakes', 'pylint'],
+            'ignore' : list(ignored_errors.keys())
+        }
+        pylama_path = temp_dir
+        options = parse_options([pylama_path], **pylama_options)
+        errors = check_path(options, rootdir='.')
 
-    # parses and sorts the errors received
-    results = pylama_parser(errors, compiled)
-    results.sort(key=lambda x: (int(x['line']), int(x['place'])))
+        # parses and sorts the errors received
+        results = pylama_parser(errors, compiled)
+        results.sort(key=lambda x: (int(x['line']), int(x['place'])))
 
-    if logger:
-        logger.debug(results)
-
-    #clear all temp files
-    code_file.close()
-    os.remove(code_filename)
+        if logger:
+            logger.debug(results)
 
     return results
 
@@ -139,52 +184,52 @@ def check_submissions(submissions, filename, temp_root):
     results = {}
 
     # creates a new temporary directory to extract the submissions
-    temp_dir = tempfile.TemporaryDirectory(dir=temp_root)
-    # updates the filename to look in the temporary dir
-    filename = join(temp_dir.name, filename)
-    if not is_py_extension(filename):
-        filename += '.py'
+    with tempfile.TemporaryDirectory(dir=temp_root) as temp_dir:
+        # updates the filename to look in the temporary dir
+        filename = join(temp_dir, filename)
+        if not is_py_extension(filename):
+            filename += '.py'
 
-    # creates a temporary file that can be extracted
-    zip_file, zip_filename = tempfile.mkstemp(dir=temp_dir.name)
+        # creates a temporary file that can be extracted
+        zip_file, zip_filename = tempfile.mkstemp(dir=temp_dir)
 
-    with open(zip_filename, 'wb') as zip_file:
-        zip_file.write(submissions)
+        with open(zip_filename, 'wb') as zip_file:
+            zip_file.write(submissions)
 
-    # extracts all students' submissions
-    zip_ref = ZipFile(zip_filename, 'r')
-    zip_ref.extractall(temp_dir.name)
-    zip_ref.close()
-
-    # removes the temp file
-    zip_file.close()
-    os.remove(zip_filename)
-
-    valid_filename = True
-
-    # loops through all submissions
-    for submission in os.listdir(temp_dir.name):
-        student = _parse_student(submission)
-
-        if student == None: continue
-    
-        # unzips the code of current student
-        zip_ref = ZipFile(join(temp_dir.name,submission), 'r')
-        zip_ref.extractall(temp_dir.name)
+        # extracts all students' submissions
+        zip_ref = ZipFile(zip_filename, 'r')
+        zip_ref.extractall(temp_dir)
         zip_ref.close()
 
-        try:
-            with open(filename, 'r') as code_file:
-                res = check_text(code_file.read(),temp_dir.name)
-                results[student] = res
-        except:
-            if valid_filename:
-                valid_filename = False
-                flash('Double check the python filename.', 'warning')
+        # removes the temp file
+        zip_file.close()
+        os.remove(zip_filename)
 
-        # removes student's code that we just analyzed
-        if exists(filename):
-            os.remove(filename)
+        valid_filename = True
+
+        # loops through all submissions
+        for submission in os.listdir(temp_dir):
+            student = _parse_student(submission)
+
+            if student == None: continue
+        
+            # unzips the code of current student
+            zip_ref = ZipFile(join(temp_dir,submission), 'r')
+            zip_ref.extractall(temp_dir)
+            zip_ref.close()
+
+            try:
+                with open(filename, 'r') as code_file:
+                    res = check_text(code_file.read(),temp_dir)
+                    results[student] = res
+            except:
+                if valid_filename:
+                    valid_filename = False
+                    flash('Double check the python filename.', 'warning')
+
+            # removes student's code that we just analyzed
+            if exists(filename):
+                os.remove(filename)
 
     return results
 
