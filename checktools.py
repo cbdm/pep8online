@@ -5,22 +5,11 @@ import io
 import sys
 import os
 from os.path import join, exists
+from ignored import ignored_errors
 import tempfile
 import re
 from pylama.main import check_path, parse_options
 from py_compile import compile
-
-ignored_errors = {
-    'E501': 'line too long (>79 characters)',
-    'C0301': 'line too long (>100 characters)',
-    'D212': 'mutually exclusive to D213 (multiline docstrings)',
-    'C0103': "naming conventions (I'm just turning it off because lab instructions go against them very often)",
-    'C0303' : 'spaces on empty line',
-    'W293' : 'spaces on empty line',
-    'R1705' : 'if return else return (unnecessary else statement)',
-    'R0916' : 'too many boolean expressions, >5 (some labs have 6+ checks)',
-    'R1703' : 'allow if something return true, instead of just return something'
-}
 
 class DisplayError(object):
     def __init__(self, error):
