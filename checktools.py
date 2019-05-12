@@ -122,24 +122,22 @@ def check_text(text, temp_root, logger=None):
     """
     # creates a new temporary directory to extract the submission
     with tempfile.TemporaryDirectory(dir=temp_root) as temp_dir:
-        
-        # creates a temporary file to write the code to
-        code_file, code_filename = tempfile.mkstemp(suffix='.py', dir=temp_dir)
-
+        # creates a temporary file to write the code
+        code_file = tempfile.NamedTemporaryFile(suffix='.py', dir=temp_dir, mode='w', delete=False)
         # writes the code to the file
-        with open(code_filename, 'w') as code_file:
-            code_file.write(text)
+        code_file.write(text)
+        # closes the file so it can be removed with the directory
+        code_file.close()
         
         # first checks if the file can be compiled
         # i.e., there are no syntax errors in the file
         compiled = True
         try:
-            compile(code_filename, doraise=True)
+            compile(code_file.name , doraise=True)
         except:
             compiled = False
 
         # configures and runs pylama to analyze the temp file
-        global ignored_errors
         pylama_options = {
             'linters': ['pep257', 'pydocstyle', 'pycodestyle', 'pyflakes', 'pylint'],
             'ignore' : list(ignored_errors.keys())
@@ -154,6 +152,7 @@ def check_text(text, temp_root, logger=None):
 
         if logger:
             logger.debug(results)
+            
 
     return results
 
@@ -179,20 +178,18 @@ def check_submissions(submissions, filename, temp_root):
         if not is_py_extension(filename):
             filename += '.py'
 
-        # creates a temporary file that can be extracted
-        zip_file, zip_filename = tempfile.mkstemp(dir=temp_dir)
 
-        with open(zip_filename, 'wb') as zip_file:
-            zip_file.write(submissions)
+        # creates a temporary file to write the zip contents
+        zip_file = tempfile.NamedTemporaryFile(suffix='.py', dir=temp_dir, mode='wb', delete=False)
+        # writes to the file
+        zip_file.write(submissions)
+        # closes the file so it can be removed with the directory
+        zip_file.close()
 
         # extracts all students' submissions
-        zip_ref = ZipFile(zip_filename, 'r')
+        zip_ref = ZipFile(zip_file.name, 'r')
         zip_ref.extractall(temp_dir)
         zip_ref.close()
-
-        # removes the temp file
-        zip_file.close()
-        os.remove(zip_filename)
 
         valid_filename = True
 
