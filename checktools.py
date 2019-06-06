@@ -164,6 +164,10 @@ def check_submissions(submissions, filename, temp_root):
         """
         parses the student's net ID from the zybooks submission filename
         """
+        # added this because some students' submissions
+        # were named in all caps, and they were being skipped
+        current_sub = current_sub.lower()
+
         data = current_sub.split(separator)
         for d in data:
             if d.endswith(domain):
